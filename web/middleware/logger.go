@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"bytes"
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -9,6 +10,11 @@ import (
 	"github.com/zenazn/goji/web"
 	"github.com/zenazn/goji/web/mutil"
 )
+
+// LoggerVerbose is the same as Logger but in addition also logs out request headers
+func LoggerVerbose(c *web.C, h http.Handler) http.Handler {
+	return http.HandlerFunc(loggerHandler(c, h, true))
+}
 
 // Logger is a middleware that logs the start and end of each request, along
 // with some useful data about what was requested, what the response status was,
@@ -24,10 +30,18 @@ import (
 // outputs logs to a different service (e.g., syslog), or formats lines like
 // those printed elsewhere in the application.
 func Logger(c *web.C, h http.Handler) http.Handler {
-	fn := func(w http.ResponseWriter, r *http.Request) {
+	return http.HandlerFunc(loggerHandler(c, h, false))
+}
+
+func loggerHandler(c *web.C, h http.Handler, verbose bool) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
 		reqID := GetReqID(*c)
 
 		printStart(reqID, r)
+
+		if verbose {
+			printHeaders(reqID, r)
+		}
 
 		lw := mutil.WrapWriter(w)
 
@@ -41,8 +55,30 @@ func Logger(c *web.C, h http.Handler) http.Handler {
 
 		printEnd(reqID, lw, t2.Sub(t1))
 	}
+}
 
-	return http.HandlerFunc(fn)
+func printHeaders(reqID string, r *http.Request) {
+	var buf bytes.Buffer
+
+	for k, v := range r.Header {
+		if reqID != "" {
+			cW(&buf, bBlack, "[%s] ", reqID)
+		}
+
+		buf.WriteString(fmt.Sprintf("%s: ", k))
+
+		for ks, vs := range v {
+			buf.WriteString(vs)
+
+			if ks+1 < len(v) {
+				buf.WriteString(", ")
+			}
+		}
+
+		log.Print(buf.String())
+
+		buf.Reset()
+	}
 }
 
 func printStart(reqID string, r *http.Request) {
