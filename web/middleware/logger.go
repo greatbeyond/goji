@@ -55,7 +55,12 @@ func printStart(reqID string, r *http.Request) {
 	cW(&buf, bMagenta, "%s ", r.Method)
 	cW(&buf, nBlue, "%q ", r.URL.String())
 	buf.WriteString("from ")
-	buf.WriteString(r.RemoteAddr)
+
+	if h := r.Header.Get("X-Forwarded-For"); h != "" {
+		buf.WriteString(h)
+	} else {
+		buf.WriteString(r.RemoteAddr)
+	}
 
 	log.Print(buf.String())
 }
